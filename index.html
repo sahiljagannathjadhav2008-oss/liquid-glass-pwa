@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liquid Glass Launcher</title>
+
+<style>
+:root{
+  --text:#fff;
+  --blue:#38bdf8;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+body{
+  margin:0;
+  font-family:system-ui,sans-serif;
+  color:var(--text);
+  overflow:hidden;
+}
+
+/* ===== Animated background ===== */
+.bg{
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(circle at 20% 20%, #5b7cfa, transparent 40%),
+    radial-gradient(circle at 80% 30%, #8b5cf6, transparent 45%),
+    radial-gradient(circle at 50% 80%, #22d3ee, transparent 40%),
+    #050816;
+  animation:bgMove 18s linear infinite alternate;
+}
+@keyframes bgMove{
+  from{filter:hue-rotate(0deg)}
+  to{filter:hue-rotate(25deg)}
+}
+
+/* ===== App container ===== */
+.app{
+  position:relative;
+  height:100vh;
+  overflow-y:auto;
+  padding-bottom:120px;
+}
+
+/* ===== Top bar ===== */
+.top{
+  display:flex;
+  gap:12px;
+  padding:14px;
+}
+.search{
+  flex:1;
+  padding:14px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.35);
+  background:rgba(255,255,255,0.12);
+  backdrop-filter:blur(20px);
+  color:white;
+  outline:none;
+}
+.toggle{
+  padding:14px 16px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.35);
+  background:rgba(255,255,255,0.15);
+  backdrop-filter:blur(20px);
+}
+
+/* ===== Liquid glass cards ===== */
+.list{padding:14px}
+.card{
+  position:relative;
+  margin-bottom:16px;
+  padding:18px;
+  border-radius:26px;
+  background:
+    linear-gradient(120deg,
+      rgba(255,255,255,0.45),
+      rgba(255,255,255,0.05)
+    );
+  border:1px solid rgba(255,255,255,0.45);
+  backdrop-filter:blur(30px);
+  overflow:hidden;
+  transition:0.3s;
+}
+.card:active{transform:scale(0.96)}
+
+/* moving reflection */
+.card::before{
+  content:"";
+  position:absolute;
+  inset:-40%;
+  background:linear-gradient(
+    120deg,
+    transparent 40%,
+    rgba(255,255,255,0.55),
+    transparent 60%
+  );
+  animation:shine 6s linear infinite;
+}
+@keyframes shine{
+  from{transform:translateX(-60%)}
+  to{transform:translateX(60%)}
+}
+
+.name{
+  font-size:17px;
+  font-weight:600;
+  position:relative;
+}
+.link{
+  font-size:14px;
+  color:var(--blue);
+  margin-top:6px;
+  word-break:break-all;
+  position:relative;
+}
+
+/* ===== Floating add button ===== */
+.add{
+  position:fixed;
+  right:20px;
+  bottom:20px;
+  width:62px;
+  height:62px;
+  border-radius:50%;
+  font-size:36px;
+  border:none;
+  background:rgba(255,255,255,0.8);
+  color:#000;
+  backdrop-filter:blur(20px);
+  transition:0.3s;
+}
+.add:active{transform:scale(0.9)}
+
+/* ===== Modal ===== */
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.55);
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+.box{
+  width:90%;
+  max-width:360px;
+  padding:18px;
+  border-radius:26px;
+  background:rgba(255,255,255,0.18);
+  backdrop-filter:blur(30px);
+  border:1px solid rgba(255,255,255,0.45);
+}
+.box input{
+  width:100%;
+  padding:14px;
+  margin-bottom:12px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.4);
+  background:rgba(255,255,255,0.25);
+  color:white;
+}
+.actions{
+  display:flex;
+  gap:12px;
+}
+.actions button{
+  flex:1;
+  padding:14px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.4);
+  background:rgba(255,255,255,0.25);
+  color:white;
+}
+.delete{color:#ff6b6b;border-color:#ff6b6b}
+</style>
+</head>
+
+<body>
+<div class="bg"></div>
+
+<div class="app">
+  <div class="top">
+    <input class="search" placeholder="Search project or URL" oninput="render(this.value)">
+    <button class="toggle">🌓</button>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<button class="add" onclick="openAdd()">+</button>
+
+<!-- Add -->
+<div class="modal" id="addModal">
+  <div class="box">
+    <input id="pname" placeholder="Project name">
+    <input id="purl" placeholder="Project URL">
+    <div class="actions">
+      <button onclick="save()">Save</button>
+      <button onclick="closeAdd()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete -->
+<div class="modal" id="delModal">
+  <div class="box">
+    <p>Are you sure to delete this?<br>वापस नहीं मिलेगा.</p>
+    <div class="actions">
+      <button class="delete" onclick="confirmDelete()">Delete</button>
+      <button onclick="closeDelete()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("projects")||"[]");
+let delIndex=null;
+
+function saveLocal(){
+  localStorage.setItem("projects",JSON.stringify(data));
+}
+function render(q=""){
+  list.innerHTML="";
+  data.filter(d=>d.name.toLowerCase().includes(q.toLowerCase())||d.url.includes(q))
+  .forEach((d,i)=>{
+    const c=document.createElement("div");
+    c.className="card";
+    c.innerHTML=`<div class="name">${d.name}</div><div class="link">${d.url}</div>`;
+    c.onclick=()=>window.open(d.url,"_system");
+    let t;
+    c.onmousedown=()=>t=setTimeout(()=>askDelete(i),600);
+    c.onmouseup=()=>clearTimeout(t);
+    c.ontouchstart=()=>t=setTimeout(()=>askDelete(i),600);
+    c.ontouchend=()=>clearTimeout(t);
+    list.appendChild(c);
+  });
+}
+function openAdd(){addModal.style.display="flex"}
+function closeAdd(){addModal.style.display="none"}
+function save(){
+  if(!pname.value||!purl.value)return;
+  data.push({name:pname.value,url:purl.value});
+  saveLocal();
+  pname.value=purl.value="";
+  closeAdd();render();
+}
+function askDelete(i){delIndex=i;delModal.style.display="flex"}
+function closeDelete(){delModal.style.display="none"}
+function confirmDelete(){
+  data.splice(delIndex,1);
+  saveLocal();closeDelete();render();
+}
+render();
+</script>
+</body>
+</html>
